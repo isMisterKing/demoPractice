@@ -48,8 +48,9 @@ groupBox.addEventListener('dragstart', e => {
 })
 
 // 监听拖动结束事件
-groupBox.addEventListener('dragend', () => {
-  currentMoveItem.classList.remove('is-draggable')
+groupBox.addEventListener('dragend', e => {
+  currentMoveItem = null
+  e.target.classList.remove('is-draggable')
   const arr = [...groupBox.children].map(item => listArray.find(o => o.value === item.getAttribute('id')))
   console.log('resultArray:', arr);
 })
