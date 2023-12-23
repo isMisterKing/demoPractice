@@ -42,18 +42,29 @@
   top: -2px;
   border-top: dashed 3px #e6a23c;
 }
+.component-wrapper.select .hover-line.top {
+  border-top-style: solid;
+}
 .hover-line.right {
   right: -2px;
   border-right: dashed 3px #e6a23c;
-  
+}
+.component-wrapper.select .hover-line.right {
+  border-right-style: solid;
 }
 .hover-line.bottom {
   bottom: -2px;
   border-bottom: dashed 3px #e6a23c;
 }
+.component-wrapper.select .hover-line.bottom {
+  border-bottom-style: solid;
+}
 .hover-line.left {
   left: -2px;
   border-left: dashed 3px #e6a23c;
+}
+.component-wrapper.select .hover-line.left {
+  border-left-style: solid;
 }
 #board .component-wrapper .hover-group .hover-dot {
   position: absolute;

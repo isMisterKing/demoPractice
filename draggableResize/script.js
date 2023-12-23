@@ -1,12 +1,3 @@
-let compList = [
-  {
-    id: "comp_618bb1bclq7swkay",
-    width: 300,
-    height: 200,
-    top: 400,
-    left: 350,
-  },
-]
 const DEFAULT_COMP_CONTENT = `
   <div class="hover-group">
     <div class="hover-line top"></div>
@@ -24,14 +15,18 @@ const DEFAULT_COMP_CONTENT = `
   </div>
   <div class="default-component"></div>
 `
-const defaultOption = {
+const DEFAULT_OPTION = {
   width: 300,
   height: 200,
   top: 100,
   left: 650,
 }
+const MIN_SIZE = 30
+
+let compList = []
 let board = null
 let selectCompList = []
+let isTriggerMouseup = false
 
 // 生成随机ID
 const randomIdAll = () => {
@@ -56,7 +51,10 @@ const addEvent = () => {
 }
 
 // 点击body
-const clickBody = () => {
+const clickBody = e => {
+  if (isTriggerMouseup) {
+    return
+  }
   clearSelectComp()
 }
 
@@ -76,6 +74,9 @@ const clickMenu = e => {
 
 // 点击组件
 const clickComp = e => {
+  if (isTriggerMouseup) {
+    return
+  }
   e.stopPropagation()
   const className = e.target.className
   if (className === 'hover-group') {
@@ -86,85 +87,260 @@ const clickComp = e => {
 let mouseDownTarget = '' // 鼠标按下将要执行的操作 move:移动组件 resize:改变组件大小
 let satartPosition = {} // 鼠标按下时的初始位置
 let movePosition = {} // 鼠标按下后移动的位置
+let mouseDownCompId = '' // 当前鼠标按下的组件id
+let resultPositionMap = {}
 
 // 鼠标按下组件
 const mousedownComp = e => {
   const className = e.target.className.split(' ')[0]
   if (className === 'hover-line' || className === 'hover-dot') {
-    selectComp(e)
     satartPosition.x = e.x
     satartPosition.y = e.y
-    mouseDownTarget = className === 'hover-line' ? 'move' : 'resize'
+    if (className === 'hover-line') {
+      mouseDownTarget = 'move'
+    } else {
+      mouseDownTarget = 'resize-' + e.target.className.split(' ')[1]
+    }
+    mouseDownCompId = e.target.parentElement.parentElement.id
     document.addEventListener('mousemove', mouseMoveHandler)
+    document.addEventListener('mouseup', mouseUpHandler)
   }
 }
 // 鼠标移动
 const mouseMoveHandler = e => {
   movePosition.x = e.x - satartPosition.x
   movePosition.y = e.y - satartPosition.y
-  let resultPositionMap = {}
-  if (mouseDownTarget = 'move') {
-    resultPositionMap = moveComp()
+  if (mouseDownTarget === 'move') {
+    moveComp()
   } else {
-    resultPositionMap = resizeComp()
+    resizeComp()
   }
-  document.addEventListener('mouseup', () => {
-    document.removeEventListener('mousemove', mouseMoveHandler)
-    mouseDownTarget = ''
-    satartPosition = {}
-    movePosition = {}
-    compList.forEach(comp => {
-      if (resultPositionMap[comp.id]) {
-        Object.keys(resultPositionMap[comp.id]).forEach(key => {
-          comp[key] = resultPositionMap[comp.id][key]
-        })
-      }
-    })
+}
+// 鼠标抬起
+const mouseUpHandler = e => {
+  // 移除事件监听及清空鼠标按下时存储的配置项
+  document.removeEventListener('mousemove', mouseMoveHandler)
+  document.removeEventListener('mouseup', mouseUpHandler)
+  mouseDownTarget = ''
+  satartPosition = {}
+  movePosition = {}
+
+  // 将鼠标移动后的组件信息存储到compList中
+  compList.forEach(comp => {
+    if (resultPositionMap[comp.id]) {
+      Object.keys(resultPositionMap[comp.id]).forEach(key => {
+        comp[key] = resultPositionMap[comp.id][key]
+      })
+    }
   })
+  resultPositionMap = {}
+
+  // 鼠标抬起时，如果鼠标位置在组件之外并且组件未被选中，则清除组件的悬浮样式
+  const className = e.target.className
+  const isCurrentComp = className === 'hover-group' || className.includes('hover-line') || className.includes('hover-dot')
+  const isExist = selectCompList.includes(mouseDownCompId)
+  if (!isCurrentComp && !isExist) {
+    const dom = document.querySelector(`#${mouseDownCompId}`)
+    if (dom) {
+      dom.firstElementChild.style = ''
+    }
+  }
+  mouseDownCompId = ''
+
+  // 解决mouseup事件后会立即执行click的问题
+  isTriggerMouseup = true
+  setTimeout(() => {
+    isTriggerMouseup = false 
+  }, 100);
 }
 // 移动组件位置
 const moveComp = () => {
-  const endCompMap = {}
-  selectCompList.forEach(item => {
-    const compId = item.id
+  const moveCompHandler = compId => {
     const startComp = compList.find(item => item.id === compId)
+
+    // 更新样式(组件位置)
     const dom = document.querySelector(`#${compId}`)
-    endCompMap[compId] = {
+    dom.style.top = startComp.top + movePosition.y + 'px'
+    dom.style.left = startComp.left + movePosition.x + 'px'
+
+    // 将更新后的值存储起来
+    resultPositionMap[compId] = {
       top: startComp.top + movePosition.y,
       left: startComp.left + movePosition.x
     }
-    dom.style.top = endCompMap[compId].top + 'px'
-    dom.style.left = endCompMap[compId].left + 'px'
-  })
-  return endCompMap
+  }
+  const isExist = selectCompList.includes(mouseDownCompId)
+  if (isExist) { // 如果当前组件处于选中状态，则移动所有被选中的组件
+    selectCompList.forEach(compId => {
+      moveCompHandler(compId)
+    })
+  } else {
+    moveCompHandler(mouseDownCompId)
+  }
 }
 // 改变组件大小
-const resizeComp = () => {}
+const resizeComp = () => {
+  // 组件初始宽高和位置
+  const startComp = compList.find(item => item.id === mouseDownCompId)
+  const { top, left, width, height } = startComp
+  const bottom = top + height
+  const right = left + width
+
+  const resultPosition = {}
+
+  // 实现等比缩放效果：宽高分别计算各自的缩放比，然后统一使用最大的那个缩放比进行计算
+  let scaleX = 1
+  let scaleY = 1
+
+  switch (mouseDownTarget) {
+    case 'resize-left-top':
+      const leftTopMap = {
+        left: left + movePosition.x,
+        top: top + movePosition.y,
+        width: width - movePosition.x,
+        height: height - movePosition.y
+      }
+      scaleX = leftTopMap.width / width
+      scaleY = leftTopMap.height / height
+      resultPosition.width = width * Math.max(scaleX, scaleY)
+      resultPosition.height = height * Math.max(scaleX, scaleY)
+      if (resultPosition.width <= MIN_SIZE) {
+        resultPosition.width = MIN_SIZE
+        resultPosition.height = height * (MIN_SIZE / width)
+      }
+      if (resultPosition.height <= MIN_SIZE) {
+        resultPosition.height = MIN_SIZE
+        resultPosition.width = width * (MIN_SIZE / height)
+      }
+      resultPosition.top = bottom - resultPosition.height
+      resultPosition.left = right - resultPosition.width
+      break
+    case 'resize-top':
+      resultPosition.height = height - movePosition.y
+      if (resultPosition.height <= MIN_SIZE) {
+        resultPosition.height = MIN_SIZE
+      }
+      resultPosition.top = bottom - resultPosition.height
+      break
+    case 'resize-right-top':
+      const rightTopMap = {
+        right: right + movePosition.x,
+        top: top + movePosition.y,
+        width: width + movePosition.x,
+        height: height - movePosition.y
+      }
+      scaleX = rightTopMap.width / width
+      scaleY = rightTopMap.height / height
+      resultPosition.width = width * Math.max(scaleX, scaleY)
+      resultPosition.height = height * Math.max(scaleX, scaleY)
+      if (resultPosition.width <= MIN_SIZE) {
+        resultPosition.width = MIN_SIZE
+        resultPosition.height = height * (MIN_SIZE / width)
+      }
+      if (resultPosition.height <= MIN_SIZE) {
+        resultPosition.width = width * (MIN_SIZE / height)
+        resultPosition.height = MIN_SIZE
+      }
+      resultPosition.top = bottom - resultPosition.height
+      break
+    case 'resize-right':
+      resultPosition.width = width + movePosition.x
+      if (resultPosition.width <= MIN_SIZE) {
+        resultPosition.width = MIN_SIZE
+      }
+      break
+    case 'resize-right-bottom':
+      const rightBottomMap = {
+        right: right + movePosition.x,
+        bottom: bottom + movePosition.y,
+        width: width + movePosition.x,
+        height: height + movePosition.y
+      }
+      scaleX = rightBottomMap.width / width
+      scaleY = rightBottomMap.height / height
+      resultPosition.width = width * Math.max(scaleX, scaleY)
+      resultPosition.height = height * Math.max(scaleX, scaleY)
+      if (resultPosition.width <= MIN_SIZE) {
+        resultPosition.width = MIN_SIZE
+        resultPosition.height = height * (MIN_SIZE / width)
+      }
+      if (resultPosition.height <= MIN_SIZE) {
+        resultPosition.width = width * (MIN_SIZE / height)
+        resultPosition.height = MIN_SIZE
+      }
+      break
+    case 'resize-bottom':
+      resultPosition.height = height + movePosition.y
+      if (resultPosition.height <= MIN_SIZE) {
+        resultPosition.height = MIN_SIZE
+      }
+      break
+    case 'resize-left-bottom':
+      const leftBottomMap = {
+        right: right + movePosition.x,
+        bottom: bottom + movePosition.y,
+        width: width - movePosition.x,
+        height: height + movePosition.y
+      }
+      scaleX = leftBottomMap.width / width
+      scaleY = leftBottomMap.height / height
+      resultPosition.width = width * Math.max(scaleX, scaleY)
+      resultPosition.height = height * Math.max(scaleX, scaleY)
+      if (resultPosition.width <= MIN_SIZE) {
+        resultPosition.width = MIN_SIZE
+        resultPosition.height = height * (MIN_SIZE / width)
+      } 
+      if (resultPosition.height <= MIN_SIZE) {
+        resultPosition.width = width * (MIN_SIZE / height)
+        resultPosition.height = MIN_SIZE
+      }
+      resultPosition.left = right - resultPosition.width
+      break
+    case 'resize-left':
+      resultPosition.width = width - movePosition.x
+      if (resultPosition.width <= MIN_SIZE) {
+        resultPosition.width = MIN_SIZE
+      }
+      resultPosition.left = right - resultPosition.width
+      break
+    default:
+      break
+  }
+
+  // 更新样式
+  const dom = document.querySelector(`#${mouseDownCompId}`)
+  Object.keys(resultPosition).forEach(key => {
+    dom.style[key] = resultPosition[key] + 'px'
+  })
+
+  // 将更新后的值存储起来
+  resultPositionMap[mouseDownCompId] = resultPosition
+}
 
 // 鼠标移入组件
 const mouseenterComp = e => {
   const id = e.target.id
-  const isExist = selectCompList.some(item => item.id === id)
-  if (!isExist) {
-    selectCompList.push({ id, isClick: false })
+  const isExist = selectCompList.includes(id)
+  // 当前组件未被选中且鼠标未处于mousedown，则显示悬浮样式
+  if (!isExist && !e.buttons) {
     e.target.firstElementChild.style.display = 'block'
   }
 }
 // 鼠标移出组件
 const mouseleaveComp = e => {
   const id = e.target.id
-  const isClick = selectCompList.find(item => item.id === id).isClick
-  if (!isClick) {
-    const index = selectCompList.findIndex(item => item.id === id)
-    selectCompList.splice(index, 1)
+  const isExist = selectCompList.includes(id)
+  // 当前组件未被选中且鼠标未处于mousedown，则清除悬浮样式
+  if (!isExist && !e.buttons) {
     e.target.firstElementChild.style = ''
   }
 }
 
 // 清除已选中组件
 const clearSelectComp = () => {
-  selectCompList.forEach(item => {
-    const dom = document.querySelector(`#${item.id}`)
+  selectCompList.forEach(id => {
+    const dom = document.querySelector(`#${id}`)
+    dom.classList.remove('select')
     dom.firstElementChild.style = ''
   })
   selectCompList = []
@@ -172,17 +348,15 @@ const clearSelectComp = () => {
 
 // 选中组件
 const selectComp = e => {
-  const id = e.target.parentElement.id || e.target.parentElement.parentElement.id
-  const isClick = selectCompList.some(item => item.id === id && item.isClick)
-  if (!e.ctrlKey && !e.buttons && !isClick) { // 多选、鼠标按下、点击已选中项时，不清除其他已选中项
-    clearSelectComp()
-  }
-  const isExist = selectCompList.some(item => item.id === id)
+  const id = e.target.parentElement.id
+  const isExist = selectCompList.includes(id)
   if (!isExist) {
-    selectCompList.push({ id, isClick: true})
+    if (!e.ctrlKey) { // 单选时需要清除其他已选中项
+      clearSelectComp()
+    }
+    selectCompList.push(id)
+    e.target.parentElement.classList.add('select')
     e.target.parentElement.firstElementChild.style.display = 'block'
-  } else {
-    selectCompList.find(item => item.id === id).isClick = true
   }
 }
 
@@ -217,10 +391,9 @@ const createComp = compOption => {
 
 // 新增组件
 const addComp = () => {
-  const compOption = JSON.parse(JSON.stringify(defaultOption))
+  const compOption = JSON.parse(JSON.stringify(DEFAULT_OPTION))
   compOption.id = `comp_${randomIdAll()}`
   overlap(compOption)
-  console.log(compOption.id, compOption);
   compList.push(compOption)
 
   createComp(compOption)
